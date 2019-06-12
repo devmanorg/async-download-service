@@ -4,8 +4,6 @@ import sys
 import signal
 from aiohttp import web
 from functools import partial
-import datetime
-import logging
 import aiofiles
 import subprocess
 import logging
@@ -13,10 +11,10 @@ import argparse
 
 
 def make_command(compression_ratio, path):
-    if compression_ratio not in range(0, 10):
-        compression_ratio = 9
-    _compression = f'-{compression_ratio}'
-    logging.debug(f'compression ratio={compression_ratio}')
+    _compression = '-9'
+    if compression_ratio in range(0, 10):
+        _compression = f'-{compression_ratio}'
+    logging.debug(f'compression ratio={_compression}')
     return 'zip', '-r', _compression, '-', path
 
 
@@ -26,8 +24,8 @@ async def handle_index_page(request):
     return web.Response(text=index_contents, content_type='text/html')
 
 
-async def make_zip_archive(request, interval_seconds,
-                           compression_ratio, folder_with_photos):
+async def make_zip_archive(request, delay, compression_ratio,
+                           folder_with_photos):
     chunk_size = 1048576
     archive_hash = request.match_info.get('archive_hash')
     archive_path = os.path.join(folder_with_photos, archive_hash)
@@ -41,8 +39,8 @@ async def make_zip_archive(request, interval_seconds,
                                                        stdout=subprocess.PIPE,
                                                        stderr=subprocess.PIPE)
     logging.debug('Process PID={}'.format(zip_process.pid))
-    response = web.StreamResponse()
 
+    response = web.StreamResponse()
     _headers = 'attachment; filename={}.zip'.format(archive_hash)
     response.headers['Content-Disposition'] = _headers
     await response.prepare(request)
@@ -54,7 +52,7 @@ async def make_zip_archive(request, interval_seconds,
             counter += 1
             logging.debug('Download chunk {}'.format(counter))
             await response.write(_chunk)
-            await asyncio.sleep(interval_seconds)
+            await asyncio.sleep(delay)
 
             if not _chunk:
                 break
@@ -76,12 +74,14 @@ async def make_zip_archive(request, interval_seconds,
 def get_args_parser():
     formatter_class = argparse.ArgumentDefaultsHelpFormatter
     parser = argparse.ArgumentParser(formatter_class=formatter_class)
-    parser.add_argument('--folder', type=str,
+    parser.add_argument('-f', '--folder', type=str,
                         default='test_photos', help='set photos folder')
-    parser.add_argument('--logs', action='store_true', default=False,
+    parser.add_argument('-c', '--compression', type=int, default=9,
+                        help='set compression ratio - min=0, max=9')
+    parser.add_argument('-d', '--delay', type=int, default=1,
+                        help='set delay of download chunk - min=0, max=9')
+    parser.add_argument('-l', '--logs', action='store_true', default=False,
                         help='set logging')
-    parser.add_argument('--compression', type=int, default=9,
-                        help='set compression ratio')
     return parser
 
 
@@ -94,7 +94,11 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
         logging.debug('DEBUG mode')
 
-    archivator = partial(make_zip_archive, interval_seconds=1,
+    delay = 1
+    if args.delay in range(0, 10):
+        delay = args.delay
+
+    archivator = partial(make_zip_archive, delay=delay,
                          compression_ratio=args.compression,
                          folder_with_photos=args.folder)
 
