@@ -24,7 +24,7 @@ async def get_zip_pid(ps_stdout):
 
 
 async def kill_process_on_pid(pid):
-    proc = await asyncio.create_subprocess_shell(f'kill {pid}',
+    proc = await asyncio.create_subprocess_exec('kill', pid,
                                                 stdout=asyncio.subprocess.PIPE,
                                                 stderr=asyncio.subprocess.PIPE)
     await proc.communicate()
@@ -62,11 +62,10 @@ async def archivate(request):
     response.headers['Content-Type'] = f'attachment; filename="{dir_name_requested}.zip"'
     await response.prepare(request)
 
-    cmd = f"cd test_photos;zip - {dir_name_requested} -r"
-    proc = await asyncio.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
+    proc = await asyncio.create_subprocess_exec('zip', '-', f'./test_photos/{dir_name_requested}',
+                                                '-r',
+                                                stdout=asyncio.subprocess.PIPE,
+                                                stderr=asyncio.subprocess.PIPE)
     size = 0
     try:
         while True:
