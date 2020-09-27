@@ -12,44 +12,19 @@ EMPTY_ARCHIVE_NAME = "empty_archive_name"
 logging.basicConfig(level=logging.INFO)
 
 
-async def get_zip_pid(ps_stdout):
-    zip_pid = 0
-    running_process_list = ps_stdout.decode().splitlines()
-    print(running_process_list)
-    for process_line in running_process_list:
-        process_list = process_line.split()
-        if process_list[-1] == 'zip':
-            zip_pid = process_list[0]
-    return zip_pid
-
-
 async def kill_process_on_pid(pid):
-    proc = await asyncio.create_subprocess_exec('kill', pid,
+    proc = await asyncio.create_subprocess_exec('kill', '-9', str(pid),
                                                 stdout=asyncio.subprocess.PIPE,
                                                 stderr=asyncio.subprocess.PIPE)
     await proc.communicate()
-    print(f'process {pid} was killed')
+    logging.info(f'process {pid} was killed')
 
 
-async def terminate_zip_process():
-    proc = await asyncio.create_subprocess_exec('ps',
-                                                stdout=asyncio.subprocess.PIPE,
-                                                stderr=asyncio.subprocess.PIPE)
-    stdout, stderr = await proc.communicate()
-    zip_pid = await get_zip_pid(stdout)
-    await kill_process_on_pid(zip_pid)
-
-
-async def show_zip_pid():
-    while True:
-        proc = await asyncio.create_subprocess_exec('ps',
-                                                    stdout=asyncio.subprocess.PIPE,
-                                                    stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await proc.communicate()
-        zip_pid = await get_zip_pid(stdout)
-
-        print(zip_pid)
-        await asyncio.sleep(2)
+async def stop_archivate(proc):
+    logging.info('скачивание остановлено пользователем')
+    # await terminate_zip_process()
+    await kill_process_on_pid(proc.pid)
+    await proc.communicate()
 
 
 async def archivate(request):
@@ -66,21 +41,23 @@ async def archivate(request):
                                                 '-r',
                                                 stdout=asyncio.subprocess.PIPE,
                                                 stderr=asyncio.subprocess.PIPE)
-    size = 0
+
     try:
         while True:
             chunk = await proc.stdout.read(10000)
             if not chunk:
                 break
             logging.info('Sending archive chunk...')
+
             await response.write(chunk)
             await asyncio.sleep(1)
 
     except asyncio.CancelledError:
-        print('скачивание остановлено пользователем')
-        await terminate_zip_process()
-
-    await show_zip_pid()
+        await stop_archivate(proc)
+    except Exception:
+        await stop_archivate(proc)
+    except SystemExit:
+        await stop_archivate(proc)
 
     return response
 
@@ -97,4 +74,4 @@ if __name__ == '__main__':
         web.get('/', handle_index_page),
         web.get('/archive/{archive_hash}/', archivate),
     ])
-    web.run_app(app)
+    web.run_app(app, port=8081)
