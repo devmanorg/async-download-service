@@ -9,23 +9,24 @@ import argparse
 DELAY_INTERVAL_SECS = 1
 PHOTOS_DIR = 'photos'
 
-# parser = argparse.ArgumentParser(description='Async download file service')
-# parser.add_argument('--logging', type=bool, default=False, help='Logging enable/disable')
-# parser.add_argument('--response_delay', type=bool, default=False, help='Response delay enable/disable')
-# parser.add_argument('--photo_dir', type=str, default='', help='Photo directory path')
-# args = parser.parse_args()
+parser = argparse.ArgumentParser(description='Async download file service')
+parser.add_argument('--logging', type=int, default=0, help='Logging enable/disable (1/0)')
+parser.add_argument('--resp_delay', type=int, default=0, help='Response delay enable/disable (1/0)', dest='delay')
+parser.add_argument('--photo_dir', type=str, default='', help='Photo directory path')
+args = parser.parse_args()
 
-# if os.path.exists(args.photo_dir):
-#     PHOTOS_PATH = args.photo_dir
-# else:
-PHOTOS_PATH = os.path.join(os.getcwd(), PHOTOS_DIR)
+if os.path.exists(args.photo_dir):
+    PHOTOS_PATH = args.photo_dir
+else:
+    PHOTOS_PATH = os.path.join(os.getcwd(), PHOTOS_DIR)
 
 EMPTY_ARCHIVE_NAME = "empty_archive_name"
 
 
-# if not args.logging:
-#     logging.basicConfig(level=logging.WARNING)
-logging.basicConfig(level=logging.INFO)
+if args.logging:
+    logging.basicConfig(level=logging.INFO)
+else:
+    logging.basicConfig(level=logging.WARNING)
 
 
 async def kill_process_on_pid(pid):
@@ -43,20 +44,20 @@ async def stop_archivate(proc):
 
 
 async def archivate(request):
-    # global args
     response = web.StreamResponse()
 
-    # print('args.photo_dir', args.photo_dir)
+    if os.path.exists(args.photo_dir):
+        photo_dir_path = args.photo_dir
+        if not os.path.exists(photo_dir_path):
+            raise web.HTTPNotFound(text="Запрашиваемый архив не существует или удален")
+        dir_name_requested = os.path.split(photo_dir_path)[-1]
+    else:
+        dir_name_requested = request.match_info.get('archive_hash', EMPTY_ARCHIVE_NAME)
+        photo_dir_path = f'./photos/{dir_name_requested}'
 
-    # if os.path.exists(args.photo_dir):
-    #     photo_dir_path = args.photo_dir
-    #     dir_name_requested = os.path.split(photo_dir_path)[-1]
-    # else:
-    dir_name_requested = request.match_info.get('archive_hash', EMPTY_ARCHIVE_NAME)
-    photo_dir_path = f'./photos/{dir_name_requested}'
-    dir_list = [dir_name for dir_name in os.listdir(PHOTOS_PATH) if os.path.isdir(os.path.join(PHOTOS_PATH, dir_name))]
-    if dir_name_requested == EMPTY_ARCHIVE_NAME or dir_name_requested not in dir_list:
-        raise web.HTTPNotFound(text="Запрашиваемый архив не существует или удален")
+        dir_list = [dir_name for dir_name in os.listdir(PHOTOS_PATH) if os.path.isdir(os.path.join(PHOTOS_PATH, dir_name))]
+        if dir_name_requested == EMPTY_ARCHIVE_NAME or dir_name_requested not in dir_list:
+            raise web.HTTPNotFound(text="Запрашиваемый архив не существует или удален")
 
     response.headers['Content-Type'] = f'attachment; filename="{dir_name_requested}.zip"'
     await response.prepare(request)
@@ -74,19 +75,19 @@ async def archivate(request):
             logging.info('Sending archive chunk...')
 
             await response.write(chunk)
-            await asyncio.sleep(1)
-            # if args.response_delay:
-            #     await asyncio.sleep(1)
+
+            if args.delay:
+                await asyncio.sleep(1)
 
     except asyncio.CancelledError:
         await stop_archivate(proc)
         raise
     except Exception:
         await stop_archivate(proc)
-        raise Exception()
+        raise
     except SystemExit:
         await stop_archivate(proc)
-        raise SystemExit()
+        raise
 
     return response
 
