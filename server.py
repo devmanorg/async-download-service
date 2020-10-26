@@ -3,12 +3,28 @@ from aiohttp import web
 import aiofiles
 import logging
 import os
+import argparse
 
-INTERVAL_SECS = 1
-PHOTOS_DIR = 'test_photos'
+
+DELAY_INTERVAL_SECS = 1
+PHOTOS_DIR = 'photos'
+
+# parser = argparse.ArgumentParser(description='Async download file service')
+# parser.add_argument('--logging', type=bool, default=False, help='Logging enable/disable')
+# parser.add_argument('--response_delay', type=bool, default=False, help='Response delay enable/disable')
+# parser.add_argument('--photo_dir', type=str, default='', help='Photo directory path')
+# args = parser.parse_args()
+
+# if os.path.exists(args.photo_dir):
+#     PHOTOS_PATH = args.photo_dir
+# else:
 PHOTOS_PATH = os.path.join(os.getcwd(), PHOTOS_DIR)
+
 EMPTY_ARCHIVE_NAME = "empty_archive_name"
 
+
+# if not args.logging:
+#     logging.basicConfig(level=logging.WARNING)
 logging.basicConfig(level=logging.INFO)
 
 
@@ -22,14 +38,22 @@ async def kill_process_on_pid(pid):
 
 async def stop_archivate(proc):
     logging.info('скачивание остановлено пользователем')
-    # await terminate_zip_process()
     await kill_process_on_pid(proc.pid)
     await proc.communicate()
 
 
 async def archivate(request):
+    # global args
     response = web.StreamResponse()
+
+    # print('args.photo_dir', args.photo_dir)
+
+    # if os.path.exists(args.photo_dir):
+    #     photo_dir_path = args.photo_dir
+    #     dir_name_requested = os.path.split(photo_dir_path)[-1]
+    # else:
     dir_name_requested = request.match_info.get('archive_hash', EMPTY_ARCHIVE_NAME)
+    photo_dir_path = f'./photos/{dir_name_requested}'
     dir_list = [dir_name for dir_name in os.listdir(PHOTOS_PATH) if os.path.isdir(os.path.join(PHOTOS_PATH, dir_name))]
     if dir_name_requested == EMPTY_ARCHIVE_NAME or dir_name_requested not in dir_list:
         raise web.HTTPNotFound(text="Запрашиваемый архив не существует или удален")
@@ -37,7 +61,7 @@ async def archivate(request):
     response.headers['Content-Type'] = f'attachment; filename="{dir_name_requested}.zip"'
     await response.prepare(request)
 
-    proc = await asyncio.create_subprocess_exec('zip', '-', f'./test_photos/{dir_name_requested}',
+    proc = await asyncio.create_subprocess_exec('zip', '-', photo_dir_path,
                                                 '-r',
                                                 stdout=asyncio.subprocess.PIPE,
                                                 stderr=asyncio.subprocess.PIPE)
@@ -51,13 +75,18 @@ async def archivate(request):
 
             await response.write(chunk)
             await asyncio.sleep(1)
+            # if args.response_delay:
+            #     await asyncio.sleep(1)
 
     except asyncio.CancelledError:
         await stop_archivate(proc)
+        raise
     except Exception:
         await stop_archivate(proc)
+        raise Exception()
     except SystemExit:
         await stop_archivate(proc)
+        raise SystemExit()
 
     return response
 
@@ -75,3 +104,4 @@ if __name__ == '__main__':
         web.get('/archive/{archive_hash}/', archivate),
     ])
     web.run_app(app, port=8081)
+
