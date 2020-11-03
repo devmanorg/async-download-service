@@ -1,6 +1,6 @@
-DELAY_INTERVAL_SECS = 1
-PHOTOS_DIR = 'photos'
-PHOTOS_PATH = os.path.join(os.getcwd(), PHOTOS_DIR)
+DELAY_RESPONSE = 1
 EMPTY_ARCHIVE_NAME = "empty_archive_name"
+PHOTOS_DIR = 'photos'
+PHOTOS_PATH = ''
 
-LOG_ENABLE = False
+arg_config = {PHOTOS_DIR: '', DELAY_RESPONSE: True}
