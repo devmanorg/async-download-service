@@ -1,9 +1,99 @@
+import os
+import logging
+import argparse
+import asyncio
 from aiohttp import web
 import aiofiles
 
+parser = argparse.ArgumentParser(description='Process some integers.')
+parser.add_argument("-l", "--logging", help="Turn on logging", action="store_true")
+parser.add_argument("-t", "--timelag", help="Add response time lag", action="store_true")
+parser.add_argument("-d", "--dir", help="Dir to store photo")
+args = parser.parse_args()
 
-async def archivate(request):
-    raise NotImplementedError
+if args.logging:
+    logging.basicConfig(level=logging.DEBUG)
+
+# Каталог с данными фотограций
+if args.dir:
+    BASE_ZIP_DIR = args.dir
+else:
+    BASE_ZIP_DIR = 'test_photos'
+
+INTERVAL_SECS = 1
+
+
+class Handler:
+
+    def __init__(self):
+        pass
+
+    async def archivate(self, request):
+
+        # Получени hash архива
+        zip_hash = request.match_info.get('archive_hash')
+
+        if not zip_hash:
+            return web.Response(
+                status='404',
+                text='Hash parametr is required.',
+            )
+            
+        zip_folder_path = f'{BASE_ZIP_DIR}/{zip_hash}'
+
+        if not os.path.isdir(zip_folder_path):
+            return web.Response(
+                status='404',
+                text='Folder not found.',
+            )
+
+        # Асинхронная процедура архивации
+        zip_procedure = await asyncio.create_subprocess_exec(
+            'zip',
+            "-r", 
+            "-", 
+            zip_hash,
+            stdout=asyncio.subprocess.PIPE,
+            cwd=f'{BASE_ZIP_DIR}/',
+        )
+
+        # Reader выходных данных zip_procedure (stdout)
+        zip_reader = zip_procedure.stdout
+
+        # Ответ
+        response = web.StreamResponse()
+        response.headers['Content-Type'] = 'application/zip'
+
+        # Описание файла
+        response.headers['Content-Disposition'] = f"attachment; filename*=utf-8''{zip_hash}.zip"
+
+        # Отправляет клиенту HTTP заголовки
+        await response.prepare(request)
+
+        try:
+            chunk_index = 0
+
+            # Пишем zip архив в ответ
+            while not zip_reader.at_eof():
+                archive_data = await zip_reader.read(10000)
+                logging.debug(f'Sending archive chunk {chunk_index}')
+                await response.write(archive_data)
+
+                if args.timelag:
+                    await asyncio.sleep(INTERVAL_SECS)
+
+                chunk_index += 1
+            
+        finally:
+            await asyncio.sleep(1)
+            
+            if zip_procedure.returncode is None:
+                zip_procedure.kill()
+                _, _ = zip_procedure.communicate()
+                
+            logging.debug('Download was interrupted')
+        
+        return response
 
 
 async def handle_index_page(request):
@@ -13,9 +103,10 @@ async def handle_index_page(request):
 
 
 if __name__ == '__main__':
+    handler = Handler()
     app = web.Application()
     app.add_routes([
         web.get('/', handle_index_page),
-        web.get('/archive/{archive_hash}/', archivate),
+        web.get('/archive/{archive_hash}/', handler.archivate),
     ])
     web.run_app(app)
