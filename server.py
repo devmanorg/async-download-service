@@ -5,12 +5,14 @@ import asyncio
 from aiohttp import web
 import aiofiles
 
+# Разбор аргументов
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument("-l", "--logging", help="Turn on logging", action="store_true")
 parser.add_argument("-t", "--timelag", help="Add response time lag", action="store_true")
 parser.add_argument("-d", "--dir", help="Dir to store photo")
 args = parser.parse_args()
 
+# Настройки логирования
 if args.logging:
     logging.basicConfig(level=logging.DEBUG)
 
@@ -21,7 +23,6 @@ else:
     BASE_ZIP_DIR = 'test_photos'
 
 INTERVAL_SECS = 1
-
 
 class Handler:
 
