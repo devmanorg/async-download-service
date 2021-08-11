@@ -7,17 +7,29 @@ import aiofiles
 
 # Разбор аргументов
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument("-l", "--logging", help="Turn on logging", action="store_true")
-parser.add_argument("-t", "--timelag", help="Add response time lag", action="store_true")
-parser.add_argument("-d", "--dir", help="Dir to store photo")
+parser.add_argument(
+    "-l", 
+    "--logging", 
+    help="Turn on logging", 
+    action="store_true",
+)
+parser.add_argument(
+    "-t", 
+    "--timelag", 
+    help="Add response time lag", 
+    action="store_true",
+)
+parser.add_argument(
+    "-fd", 
+    "--filesdir", 
+    help="Dir to store photo",
+)
 args = parser.parse_args()
 
-# Настройки логирования
 if args.logging:
     logging.basicConfig(level=logging.DEBUG)
 
-# Каталог с данными фотограций
-if args.dir:
+if args.pthotodir:
     BASE_ZIP_DIR = args.dir
 else:
     BASE_ZIP_DIR = 'test_photos'
@@ -25,13 +37,13 @@ else:
 INTERVAL_SECS = 1
 
 class Handler:
+    """Класс c асинхронными обработчиками."""
 
     def __init__(self):
         pass
 
     async def archivate(self, request):
-
-        # Получени hash архива
+        """Асинхронный обработчик для создания и получения архива."""
         zip_hash = request.match_info.get('archive_hash')
 
         if not zip_hash:
@@ -48,33 +60,27 @@ class Handler:
                 text='Folder not found.',
             )
 
-        # Асинхронная процедура архивации
+        procedure_stdout = asyncio.subprocess.PIPE
         zip_procedure = await asyncio.create_subprocess_exec(
             'zip',
             "-r", 
             "-", 
             zip_hash,
-            stdout=asyncio.subprocess.PIPE,
+            stdout=procedure_stdout,
             cwd=f'{BASE_ZIP_DIR}/',
         )
 
-        # Reader выходных данных zip_procedure (stdout)
         zip_reader = zip_procedure.stdout
-
-        # Ответ
         response = web.StreamResponse()
         response.headers['Content-Type'] = 'application/zip'
-
-        # Описание файла
         response.headers['Content-Disposition'] = f"attachment; filename*=utf-8''{zip_hash}.zip"
 
-        # Отправляет клиенту HTTP заголовки
         await response.prepare(request)
 
         try:
             chunk_index = 0
 
-            # Пишем zip архив в ответ
+            # Отправка данных архива кусками
             while not zip_reader.at_eof():
                 archive_data = await zip_reader.read(10000)
                 logging.debug(f'Sending archive chunk {chunk_index}')
@@ -98,9 +104,13 @@ class Handler:
 
 
 async def handle_index_page(request):
+    """Обработчик главной страницы."""
     async with aiofiles.open('index.html', mode='r') as index_file:
         index_contents = await index_file.read()
-    return web.Response(text=index_contents, content_type='text/html')
+    return web.Response(
+        text=index_contents, 
+        content_type='text/html',
+    )
 
 
 if __name__ == '__main__':
