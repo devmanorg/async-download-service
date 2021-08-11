@@ -1,11 +1,10 @@
-import os
 import logging
 import argparse
 import asyncio
+from pathlib import Path
 from aiohttp import web
 import aiofiles
 
-# Разбор аргументов
 parser = argparse.ArgumentParser(
     description='Async app that creates zip archives.',
 )
@@ -39,9 +38,9 @@ INTERVAL_SECS = 1
 async def archivate(request):
     """Асинхронный обработчик для создания и получения архива."""
     zip_hash = request.match_info.get('archive_hash')        
-    zip_folder_path = f'{BASE_ZIP_DIR}/{zip_hash}'
+    zip_folder_path = Path.cwd() / BASE_ZIP_DIR / zip_hash
 
-    if not os.path.isdir(zip_folder_path):
+    if not zip_folder_path.is_dir():
         return web.Response(
             status='404',
             text='Folder not found.',
@@ -54,7 +53,7 @@ async def archivate(request):
         "-", 
         zip_hash,
         stdout=procedure_stdout,
-        cwd=f'{BASE_ZIP_DIR}/',
+        cwd=f'{BASE_ZIP_DIR}',
     )
 
     zip_reader = zip_procedure.stdout
