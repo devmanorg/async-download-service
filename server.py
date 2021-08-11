@@ -6,7 +6,9 @@ from aiohttp import web
 import aiofiles
 
 # Разбор аргументов
-parser = argparse.ArgumentParser(description='Process some integers.')
+parser = argparse.ArgumentParser(
+    description='Async app that creates zip archives.',
+)
 parser.add_argument(
     "-l", 
     "--logging", 
