@@ -32,74 +32,62 @@ args = parser.parse_args()
 if args.logging:
     logging.basicConfig(level=logging.DEBUG)
 
-BASE_ZIP_DIR = args.dir
+BASE_ZIP_DIR = args.filesdir
 INTERVAL_SECS = 1
 
-class Handler:
-    """Класс c асинхронными обработчиками."""
 
-    def __init__(self):
-        pass
+async def archivate(request):
+    """Асинхронный обработчик для создания и получения архива."""
+    zip_hash = request.match_info.get('archive_hash')        
+    zip_folder_path = f'{BASE_ZIP_DIR}/{zip_hash}'
 
-    async def archivate(self, request):
-        """Асинхронный обработчик для создания и получения архива."""
-        zip_hash = request.match_info.get('archive_hash')
-
-        if not zip_hash:
-            return web.Response(
-                status='404',
-                text='Hash parametr is required.',
-            )
-            
-        zip_folder_path = f'{BASE_ZIP_DIR}/{zip_hash}'
-
-        if not os.path.isdir(zip_folder_path):
-            return web.Response(
-                status='404',
-                text='Folder not found.',
-            )
-
-        procedure_stdout = asyncio.subprocess.PIPE
-        zip_procedure = await asyncio.create_subprocess_exec(
-            'zip',
-            "-r", 
-            "-", 
-            zip_hash,
-            stdout=procedure_stdout,
-            cwd=f'{BASE_ZIP_DIR}/',
+    if not os.path.isdir(zip_folder_path):
+        return web.Response(
+            status='404',
+            text='Folder not found.',
         )
 
-        zip_reader = zip_procedure.stdout
-        response = web.StreamResponse()
-        response.headers['Content-Type'] = 'application/zip'
-        response.headers['Content-Disposition'] = f"attachment; filename*=utf-8''{zip_hash}.zip"
+    procedure_stdout = asyncio.subprocess.PIPE
+    zip_procedure = await asyncio.create_subprocess_exec(
+        'zip',
+        "-r", 
+        "-", 
+        zip_hash,
+        stdout=procedure_stdout,
+        cwd=f'{BASE_ZIP_DIR}/',
+    )
 
-        await response.prepare(request)
+    zip_reader = zip_procedure.stdout
+    response = web.StreamResponse()
+    response.headers['Content-Type'] = 'application/zip'
+    response.headers['Content-Disposition'] = f"attachment; filename*=utf-8''{zip_hash}.zip"
 
-        try:
-            chunk_index = 0
+    await response.prepare(request)
 
-            # Отправка данных архива кусками
-            while not zip_reader.at_eof():
-                archive_data = await zip_reader.read(10000)
-                logging.debug(f'Sending archive chunk {chunk_index}')
-                await response.write(archive_data)
+    try:
+        chunk_index = 0
 
-                if args.timelag:
-                    await asyncio.sleep(INTERVAL_SECS)
+        # Отправка данных архива кусками
+        while not zip_reader.at_eof():
+            archive_data = await zip_reader.read(10000)
+            logging.debug(f'Sending archive chunk {chunk_index}')
+            await response.write(archive_data)
 
-                chunk_index += 1
-            
-        finally:
-            await asyncio.sleep(1)
-            
-            if zip_procedure.returncode is None:
-                zip_procedure.kill()
-                _, _ = zip_procedure.communicate()
-                
-            logging.debug('Download was interrupted')
+            if args.timelag:
+                await asyncio.sleep(INTERVAL_SECS)
+
+            chunk_index += 1
         
-        return response
+    finally:
+        await asyncio.sleep(1)
+        
+        if zip_procedure.returncode is None:
+            zip_procedure.kill()
+            zip_procedure.communicate()
+            
+        logging.debug('Download was interrupted')
+    
+    return response
 
 
 async def handle_index_page(request):
@@ -113,10 +101,9 @@ async def handle_index_page(request):
 
 
 if __name__ == '__main__':
-    handler = Handler()
     app = web.Application()
     app.add_routes([
         web.get('/', handle_index_page),
-        web.get('/archive/{archive_hash}/', handler.archivate),
+        web.get('/archive/{archive_hash}/', archivate),
     ])
     web.run_app(app)
