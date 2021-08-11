@@ -9,21 +9,21 @@ parser = argparse.ArgumentParser(
     description='Async app that creates zip archives.',
 )
 parser.add_argument(
-    "-l", 
-    "--logging", 
-    help="Turn on logging", 
-    action="store_true",
+    '-l', 
+    '--logging', 
+    help='Turn on logging', 
+    action='store_true',
 )
 parser.add_argument(
-    "-t", 
-    "--timelag", 
-    help="Add response time lag", 
-    action="store_true",
+    '-t', 
+    '--timelag', 
+    help='Add response time lag', 
+    action='store_true',
 )
 parser.add_argument(
-    "-fd", 
-    "--filesdir", 
-    help="Dir to store photo",
+    '-fd', 
+    '--filesdir', 
+    help='Dir to store photo',
     default='test_photos',
 )
 args = parser.parse_args()
@@ -49,8 +49,8 @@ async def archivate(request):
     procedure_stdout = asyncio.subprocess.PIPE
     zip_procedure = await asyncio.create_subprocess_exec(
         'zip',
-        "-r", 
-        "-", 
+        '-r', 
+        '-', 
         zip_hash,
         stdout=procedure_stdout,
         cwd=f'{BASE_ZIP_DIR}',
@@ -59,7 +59,7 @@ async def archivate(request):
     zip_reader = zip_procedure.stdout
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'application/zip'
-    response.headers['Content-Disposition'] = f"attachment; filename*=utf-8''{zip_hash}.zip"
+    response.headers['Content-Disposition'] = f'attachment; filename*=utf-8\'\'{zip_hash}.zip'
 
     await response.prepare(request)
 
