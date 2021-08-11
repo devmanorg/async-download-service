@@ -1,10 +1,10 @@
 import logging
-from functools import partial
 import argparse
 import asyncio
+import aiofiles
+from functools import partial
 from pathlib import Path
 from aiohttp import web
-import aiofiles
 
 BASE_TIME_INTERVAL = 1
 
