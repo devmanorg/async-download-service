@@ -25,17 +25,14 @@ parser.add_argument(
     "-fd", 
     "--filesdir", 
     help="Dir to store photo",
+    default='test_photos',
 )
 args = parser.parse_args()
 
 if args.logging:
     logging.basicConfig(level=logging.DEBUG)
 
-if args.pthotodir:
-    BASE_ZIP_DIR = args.dir
-else:
-    BASE_ZIP_DIR = 'test_photos'
-
+BASE_ZIP_DIR = args.dir
 INTERVAL_SECS = 1
 
 class Handler:
