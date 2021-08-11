@@ -1,9 +1,12 @@
 import logging
+from functools import partial
 import argparse
 import asyncio
 from pathlib import Path
 from aiohttp import web
 import aiofiles
+
+BASE_TIME_INTERVAL = 1
 
 parser = argparse.ArgumentParser(
     description='Async app that creates zip archives.',
@@ -31,14 +34,11 @@ args = parser.parse_args()
 if args.logging:
     logging.basicConfig(level=logging.DEBUG)
 
-BASE_ZIP_DIR = args.filesdir
-INTERVAL_SECS = 1
 
-
-async def archivate(request):
+async def archivate(request, zip_dir='', timelag = False, interval = 0):
     """Асинхронный обработчик для создания и получения архива."""
     zip_hash = request.match_info.get('archive_hash')        
-    zip_folder_path = Path.cwd() / BASE_ZIP_DIR / zip_hash
+    zip_folder_path = Path.cwd() / zip_dir / zip_hash
 
     if not zip_folder_path.is_dir():
         return web.Response(
@@ -53,7 +53,7 @@ async def archivate(request):
         '-', 
         zip_hash,
         stdout=procedure_stdout,
-        cwd=f'{BASE_ZIP_DIR}',
+        cwd=zip_dir,
     )
 
     zip_reader = zip_procedure.stdout
@@ -72,8 +72,8 @@ async def archivate(request):
             logging.debug(f'Sending archive chunk {chunk_index}')
             await response.write(archive_data)
 
-            if args.timelag:
-                await asyncio.sleep(INTERVAL_SECS)
+            if timelag:
+                await asyncio.sleep(interval)
 
             chunk_index += 1
         
@@ -103,6 +103,14 @@ if __name__ == '__main__':
     app = web.Application()
     app.add_routes([
         web.get('/', handle_index_page),
-        web.get('/archive/{archive_hash}/', archivate),
+        web.get(
+            '/archive/{archive_hash}/', 
+            partial(
+                archivate,
+                zip_dir=args.filesdir,
+                timelag=args.timelag,
+                interval=BASE_TIME_INTERVAL,
+            ),
+        ),
     ])
     web.run_app(app)
