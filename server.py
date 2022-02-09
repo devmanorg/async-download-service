@@ -2,7 +2,7 @@ from aiohttp import web
 import aiofiles
 
 
-async def archivate(request):
+async def archive(request):
     raise NotImplementedError
 
 
@@ -16,6 +16,6 @@ if __name__ == '__main__':
     app = web.Application()
     app.add_routes([
         web.get('/', handle_index_page),
-        web.get('/archive/{archive_hash}/', archivate),
+        web.get('/archive/{archive_hash}/', archive),
     ])
     web.run_app(app)
