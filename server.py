@@ -6,6 +6,7 @@ import subprocess
 import aiofiles
 from aiohttp import web
 
+
 logging.basicConfig(
     format=(
         '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s] '
@@ -21,8 +22,7 @@ async def archive(request):
     if not os.path.isdir(f'./test_photos/{archive_hash}'):
         raise web.HTTPNotFound(text='404 - страница не найдена')
 
-    #cmd = f'cd ./test_photos && zip -r - {archive_hash}'
-    cmd = ['cd', './test_photos', '&&', 'zip', '-r', '-', str(archive_hash)]
+    cmd = ['zip', '-r', '-j', '-', f'./test_photos/{str(archive_hash)}']
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=subprocess.PIPE,
@@ -45,12 +45,16 @@ async def archive(request):
             logging.info(f'Sending archive chunk {chunk_number} ...')
             chunk_number += 1
             await response.write(stdout)
-            await asyncio.sleep(1)
+            await asyncio.sleep(10)
 
     except asyncio.CancelledError:
         logging.warning(f'Download was interrupted')  
     finally:
-        process.kill()
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        
     return response
 
 
