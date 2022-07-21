@@ -1,9 +1,18 @@
 import asyncio
+import logging
 import os
 import subprocess
 
 import aiofiles
 from aiohttp import web
+
+logging.basicConfig(
+    format=(
+        '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s] '
+        '%(message)s'
+    ),
+    level=logging.DEBUG
+)
 
 
 async def archive(request):
@@ -12,9 +21,10 @@ async def archive(request):
     if not os.path.isdir(f'./test_photos/{archive_hash}'):
         raise web.HTTPNotFound(text='404 - страница не найдена')
 
-    cmd = f'cd ./test_photos && zip -r - {archive_hash}'
-    process = await asyncio.create_subprocess_shell(
-        cmd,
+    #cmd = f'cd ./test_photos && zip -r - {archive_hash}'
+    cmd = ['cd', './test_photos', '&&', 'zip', '-r', '-', str(archive_hash)]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -28,10 +38,19 @@ async def archive(request):
 
     await response.prepare(request)
 
-    while not process.stdout.at_eof():
-        stdout = await process.stdout.read(n=sample_size)
-        await response.write(stdout)
+    chunk_number = 1
+    try:
+        while not process.stdout.at_eof():
+            stdout = await process.stdout.read(sample_size)
+            logging.info(f'Sending archive chunk {chunk_number} ...')
+            chunk_number += 1
+            await response.write(stdout)
+            await asyncio.sleep(1)
 
+    except asyncio.CancelledError:
+        logging.warning(f'Download was interrupted')  
+    finally:
+        process.kill()
     return response
 
 
