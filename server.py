@@ -2,27 +2,27 @@ import argparse
 import asyncio
 import logging
 import os
-import signal
 import subprocess
 
 import aiofiles
 from aiohttp import web
+from functools import partial
 
 logger = logging.getLogger('server')
 SAMPLE_SIZE = 1024 * 100
 
 
-async def archive(request):
-    
+async def archive(request, delay, photos_dir):
     archive_hash = request.match_info['archive_hash']
     if not os.path.isdir(f'{photos_dir}{archive_hash}'):
         raise web.HTTPNotFound(text='404 - страница не найдена')
 
-    cmd = ['zip', '-r', '-', f'{photos_dir}{str(archive_hash)}']
+    cmd = ['zip', '-r', '-', '.']
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        cwd=f'{photos_dir}/{archive_hash}'
     )
 
     response = web.StreamResponse()
@@ -41,25 +41,16 @@ async def archive(request):
             logging.info(f'Sending archive chunk {chunk_number} ...')
             chunk_number += 1
             await response.write(stdout)
-            if delay_enabled:
-                await asyncio.sleep(10)
+            if delay:
+                await asyncio.sleep(delay)
 
-    except asyncio.CancelledError as cancelled_error:
+    except asyncio.CancelledError:
         logging.warning('Download was interrupted')
-        raise cancelled_error
-    except KeyboardInterrupt:
-        try:
-            process.communicate()
-            process.send_signal(signal.SIGTERM)
-        except AttributeError:
-            logging.warning('There was no process')
+        raise
     finally:
-        try:
+        if process.returncode is None:
             process.kill()
-        except ProcessLookupError:
-            pass
-        except AttributeError:
-            logging.warning('There was no process')
+            await process.communicate()
 
     return response
 
@@ -74,16 +65,17 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--logging', help='Enable Logging')
-    parser.add_argument('--delay', help=('Make download sleep for 10 seconds '
-                                         'every chunk of data'))
-    parser.add_argument('--photos', help='Root folder for photo directories')
+    parser.add_argument(
+        '--delay', type=int, default=0,
+        help=('Seconds to sleep for every chunk of data')
+    )
+    parser.add_argument(
+        '--photos', type=str, default='./test_photos/',
+        help='Root folder for photo directories'
+    )
     args = parser.parse_args()
 
-    delay_enabled = args.delay
-    logging_enabled = args.logging
-    photos_dir = args.photos if args.photos else './test_photos/'
-
-    if not logging_enabled:
+    if not args.logging:
         logger.disabled = True
     else:
         logging.basicConfig(
@@ -97,6 +89,7 @@ if __name__ == '__main__':
     app = web.Application()
     app.add_routes([
         web.get('/', handle_index_page),
-        web.get('/archive/{archive_hash}/', archive),
+        web.get('/archive/{archive_hash}/', partial(archive,
+                delay=args.delay, photos_dir=args.photos))
     ])
     web.run_app(app)
