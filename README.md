@@ -36,6 +36,21 @@ python server.py
 
 Сервер запустится на порту 8080, чтобы проверить его работу перейдите в браузере на страницу [http://127.0.0.1:8080/](http://127.0.0.1:8080/).
 
+
+Также можно использовать следующие параметры запуска:
+
+`-q / --quiet` - заглушить все сообщения логгера
+
+`-p / --path PHOTO_DIR` - указать путь к директории, содержащей фото
+
+`-d / --delay DELAY` - указать задержку в секундах между отправкой частей архива пользователю
+
+Пример запуска с параметрами:
+```bash
+python server.py --quiet -p /home/user/photos -d 5
+```
+
+
 ## Как развернуть на сервере
 
 ```bash
@@ -47,6 +62,28 @@ python server.py
 ```
 GET http://host.ru/archive/3bea29ccabbbf64bdebcc055319c5745/
 GET http://host.ru/archive/af1ad8c76fda2e48ea9aed2937e972ea/
+```
+
+## Запуск через Docker
+
+Сначала установите Docker по [инструкции](https://docs.docker.com/engine/install/).
+
+Затем выполните [действия](https://docs.docker.com/engine/install/linux-postinstall/), нужные после установки.
+
+Сборка и запуск образа:
+```bash
+$ docker build -t async-download-service_server .
+$ docker run --name async-download-service -p 8080:8080 -d async-download-service_server
+```
+
+Запуск через docker-compose:
+```bash
+$ docker-compose up -d
+```
+
+Запуск с параметрами:
+```bash
+DELAY=1 PHOTO_DIR=/home/user/photos docker-compose up -d
 ```
 
 # Цели проекта

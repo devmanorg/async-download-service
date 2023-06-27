@@ -1,0 +1,8 @@
+version: "3.8"
+services:
+  server:
+    build: .
+    container_name: async-download-service
+    command: python server.py -d ${DELAY-0} -p ${PHOTO_DIR-./test_photos}
+    ports:
+      - "8080:8080"
