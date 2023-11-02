@@ -35,7 +35,12 @@ async def archive(request):
     chunk_number = 0
     while True:
         logger.info(f"Sending archive chunk {chunk_number}")
-        await response.write(await proc.stdout.read(n=CHUNK_SIZE))
+        await asyncio.sleep(1)
+        try:
+            await response.write(await proc.stdout.read(n=CHUNK_SIZE))
+        except ConnectionResetError:
+            logger.error(f"Connection Break")
+            break
         chunk_number += 1
         if proc.stdout.at_eof():
             logger.info(f"Complete")
