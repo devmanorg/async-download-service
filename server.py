@@ -45,6 +45,29 @@ if logging_enabled:
 logger = logging.getLogger(__name__)
 
 
+class ArchiveHandler:
+    def __init__(self, archive_path):
+        self.proc = None
+        self.archive_path = archive_path
+
+    async def start_archive_process(self):
+        self.proc = await asyncio.create_subprocess_exec(
+            "zip",
+            "-r",
+            "-",
+            f".",
+            "*",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=self.archive_path,
+        )
+
+    async def stop_archive_process(self):
+        if self.proc:
+            self.proc.terminate()
+            await self.proc.communicate()
+
+
 async def archive(request):
     archive_hash = request.match_info.get("archive_hash", "Anonymous")
     cwd = os.getcwd()
@@ -60,35 +83,26 @@ async def archive(request):
     response.headers["Content-Disposition"] = "attachment; filename=photos.zip"
     await response.prepare(request)
 
-    proc = await asyncio.create_subprocess_exec(
-        "zip",
-        "-r",
-        "-",
-        f".",
-        "*",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=archive_path,
-    )
+    archive_handler = ArchiveHandler(archive_path=archive_path)
+    await archive_handler.start_archive_process()
+
     chunk_number = 0
     while True:
         logger.info(f"Sending archive chunk {chunk_number}")
         if response_delay:
             await asyncio.sleep(response_delay)
         try:
-            await response.write(await proc.stdout.read(n=CHUNK_SIZE))
+            await response.write(await archive_handler.proc.stdout.read(n=CHUNK_SIZE))
         except ConnectionResetError:
             logger.error(f"Download was interrupted, terminating zip process")
-            proc.terminate()
-            await proc.communicate()
+            await archive_handler.stop_archive_process()
             break
         except Exception:
             logger.error(f"Exception, terminating zip process")
-            proc.terminate()
-            await proc.communicate()
+            await archive_handler.stop_archive_process()
             break
         chunk_number += 1
-        if proc.stdout.at_eof():
+        if archive_handler.proc.stdout.at_eof():
             logger.info(f"Complete")
             break
     return response
